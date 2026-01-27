@@ -1,0 +1,17 @@
+project_id = "mlgciljvegmfirpmnqef"
+
+[functions.teaching-assistant]
+verify_jwt = false
+
+[functions.extract-document]
+verify_jwt = false
+
+[functions.voice-to-text]
+verify_jwt = false
+
+[functions.generate-document]
+verify_jwt = false
+verify_jwt = false
+
+[functions.extract-document]
+verify_jwt = false
