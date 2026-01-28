@@ -11,8 +11,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function Settings() {
+  const { t } = useLanguage();
   const { data: profile, isLoading: profileLoading, refetch } = useTeacherProfile();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -77,9 +79,9 @@ export default function Settings() {
               <SettingsIcon className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h1 className="font-display text-3xl font-bold text-foreground">Settings</h1>
+              <h1 className="font-display text-3xl font-bold text-foreground">{t("settings.title")}</h1>
               <p className="text-muted-foreground">
-                Manage your account and preferences
+                {t("settings.subtitle")}
               </p>
             </div>
           </div>
@@ -90,15 +92,15 @@ export default function Settings() {
           <CardHeader className="bg-primary/5 rounded-t-lg">
             <CardTitle className="flex items-center gap-2 text-primary">
               <User className="h-5 w-5" />
-              Profile Information
+              {t("settings.profileInfo")}
             </CardTitle>
             <CardDescription>
-              Update your personal information
+              {t("settings.profileInfoDesc")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-6">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t("settings.email")}</Label>
               <Input
                 id="email"
                 value={user?.email || ""}
@@ -106,28 +108,28 @@ export default function Settings() {
                 className="bg-secondary/50"
               />
               <p className="text-xs text-muted-foreground">
-                Email cannot be changed
+                {t("settings.emailCantChange")}
               </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="fullName">Full Name</Label>
+              <Label htmlFor="fullName">{t("settings.fullName")}</Label>
               <Input
                 id="fullName"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="Enter your full name"
+                placeholder={t("settings.fullName")}
                 className="border-primary/20 focus:border-primary"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="schoolName">School Name</Label>
+              <Label htmlFor="schoolName">{t("settings.schoolName")}</Label>
               <Input
                 id="schoolName"
                 value={schoolName}
                 onChange={(e) => setSchoolName(e.target.value)}
-                placeholder="Enter your school name"
+                placeholder={t("settings.schoolName")}
                 className="border-primary/20 focus:border-primary"
               />
             </div>
@@ -142,7 +144,7 @@ export default function Settings() {
               ) : (
                 <Save className="h-4 w-4 mr-2" />
               )}
-              Save Changes
+              {t("common.saveChanges")}
             </Button>
           </CardContent>
         </Card>
@@ -152,17 +154,17 @@ export default function Settings() {
           <CardHeader className="bg-primary/5 rounded-t-lg">
             <CardTitle className="flex items-center gap-2 text-primary">
               <School className="h-5 w-5" />
-              Account
+              {t("settings.account")}
             </CardTitle>
             <CardDescription>
-              Manage your account settings
+              {t("settings.accountDesc")}
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
                 <div>
-                  <p className="font-medium">Account Created</p>
+                  <p className="font-medium">{t("settings.accountCreated")}</p>
                   <p className="text-sm text-muted-foreground">
                     {profile?.created_at 
                       ? new Date(profile.created_at).toLocaleDateString("en-US", {
@@ -185,7 +187,7 @@ export default function Settings() {
                   className="w-full sm:w-auto"
                 >
                   <LogOut className="h-4 w-4 mr-2" />
-                  Sign Out
+                  {t("settings.signOut")}
                 </Button>
               </div>
             </div>

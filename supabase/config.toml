@@ -11,7 +11,15 @@ verify_jwt = false
 
 [functions.generate-document]
 verify_jwt = false
+
+[functions.generate-syllabus]
 verify_jwt = false
 
-[functions.extract-document]
+[functions.extract-chapters]
+verify_jwt = false
+
+[functions.extract-chat-file]
+verify_jwt = false
+
+[functions.send-quiz-email]
 verify_jwt = false

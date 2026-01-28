@@ -28,6 +28,13 @@ export function useTeachingAssistant() {
     setIsLoading(true);
     setContent("");
     setError(null);
+    
+    console.log("TeachingAssistant: Starting generation with params:", {
+      type: params.type,
+      documentId: params.documentId,
+      classLevel: params.classLevel,
+      subject: params.subject,
+    });
 
     try {
       const response = await fetch(CHAT_URL, {
@@ -46,7 +53,14 @@ export function useTeachingAssistant() {
         if (response.status === 402) {
           throw new Error("AI credits exhausted. Please add credits.");
         }
+        if (response.status === 404) {
+          throw new Error("Document content not found. Please ensure the document is processed.");
+        }
+        if (response.status === 400) {
+          throw new Error("Invalid request. Please check your inputs.");
+        }
         const data = await response.json().catch(() => ({}));
+        console.error("Teaching assistant error:", response.status, data);
         throw new Error(data.error || "Failed to generate content");
       }
 
@@ -112,9 +126,11 @@ export function useTeachingAssistant() {
         }
       }
 
+      console.log("TeachingAssistant: Generation complete, content length:", fullContent.length);
       return fullContent;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("TeachingAssistant: Error occurred:", message);
       setError(message);
       toast.error(message);
       return null;

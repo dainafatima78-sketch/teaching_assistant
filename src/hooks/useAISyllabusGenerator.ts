@@ -25,6 +25,12 @@ export function useAISyllabusGenerator() {
     setContent("");
     setError(null);
 
+    console.log("AISyllabusGenerator: Starting generation with params:", {
+      mode: params.mode,
+      classLevel: params.classLevel,
+      subject: params.subject,
+    });
+
     try {
       const response = await fetch(GENERATE_URL, {
         method: "POST",
@@ -107,9 +113,11 @@ export function useAISyllabusGenerator() {
         }
       }
 
+      console.log("AISyllabusGenerator: Generation complete, content length:", fullContent.length);
       return fullContent;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("AISyllabusGenerator: Error occurred:", message);
       setError(message);
       toast.error(message);
       return null;

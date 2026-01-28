@@ -102,8 +102,8 @@ export function ContentPreviewModal({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-4xl h-[85vh] flex flex-col">
+        <DialogHeader className="shrink-0">
           <div className="flex items-center justify-between pr-8">
             <div>
               <DialogTitle className="text-primary text-xl">{title}</DialogTitle>
@@ -144,21 +144,25 @@ export function ContentPreviewModal({
           </div>
         </DialogHeader>
         
-        <ScrollArea className="flex-1 max-h-[60vh]">
-          {isEditing ? (
-            <Textarea
-              value={editedContent}
-              onChange={(e) => setEditedContent(e.target.value)}
-              className="min-h-[500px] font-mono text-sm border-primary/20"
-            />
-          ) : (
-            <div className="bg-secondary/30 rounded-lg p-6 border border-primary/10">
-              <div className="whitespace-pre-wrap text-base leading-relaxed text-foreground">
-                {displayContent}
-              </div>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <ScrollArea className="h-full">
+            <div className="pr-4 pb-4">
+              {isEditing ? (
+                <Textarea
+                  value={editedContent}
+                  onChange={(e) => setEditedContent(e.target.value)}
+                  className="min-h-[500px] font-mono text-sm border-primary/20 resize-none"
+                />
+              ) : (
+                <div className="bg-secondary/30 rounded-lg p-6 border border-primary/10">
+                  <div className="whitespace-pre-wrap text-base leading-relaxed text-foreground font-urdu" dir="auto">
+                    {displayContent}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </ScrollArea>
+          </ScrollArea>
+        </div>
         
         <div className="flex gap-2 justify-between pt-4 border-t">
           <div className="flex gap-2">

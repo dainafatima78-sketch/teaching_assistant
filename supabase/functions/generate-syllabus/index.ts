@@ -5,64 +5,107 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Mode-specific system prompts
+// Professional mode-specific system prompts for AI KISA Model School
 const SYSTEM_PROMPTS = {
-  full: `You are a school curriculum expert specializing in creating comprehensive syllabi.
+  full: `You are a Professional Curriculum Designer for AI KISA Model School, Pakistan.
+Your task is to create comprehensive, structured syllabi following Pakistani educational standards.
 
-TASK: Generate a complete syllabus for the specified class and subject.
-
-OUTPUT FORMAT:
-For each chapter, provide:
-- Chapter Number and Title
-- Topics covered (bullet points)
-- Learning Objectives (2-3 per chapter)
-- Key Terms/Keywords
-
-RULES:
+SYLLABUS GENERATION RULES:
 - Content must be age-appropriate for the specified grade level
-- Use clear, simple language suitable for school education
-- Follow standard educational frameworks
-- Include 6-12 chapters depending on the subject
-- Do not include adult, violent, or inappropriate content
-- Make topics progressive (simple to complex)`,
+- Follow Punjab/Pakistani educational board standards
+- Use clear, professional language
+- Include practical applications where relevant
+- Maintain logical progression from simple to complex topics
 
-  chapter: `You are a school curriculum expert.
+OUTPUT FORMAT FOR FULL SYLLABUS:
+For each chapter, provide:
 
-TASK: Generate detailed content for a specific chapter.
+**Chapter [Number]: [Title]**
+Topics Covered:
+• Topic 1
+• Topic 2
+• Topic 3
 
-OUTPUT FORMAT:
-- Chapter Title
-- Introduction (2-3 sentences)
-- Main Topics (with brief explanations)
-- Sub-topics under each main topic
-- Learning Objectives (3-5 objectives)
-- Key Terms with definitions
-- Suggested Activities (2-3)
-- Assessment Questions (3-5 sample questions)
+Learning Objectives:
+1. Students will be able to...
+2. Students will understand...
 
-RULES:
-- Content must be age-appropriate
-- Use simple, clear language
-- Be comprehensive but concise
-- Include practical examples where relevant`,
+Key Terms: term1, term2, term3
 
-  bulk: `You are a school curriculum expert.
+---
 
-TASK: Generate multiple chapter titles and outlines in bulk.
+Include 8-12 chapters covering the full subject scope for the grade level.
+Ensure chapters build upon each other progressively.`,
 
-OUTPUT FORMAT:
-For each chapter provide:
-- Chapter Number
-- Chapter Title
-- Brief Outline (2-3 sentences describing what will be covered)
-- Key Topics (3-5 bullet points)
+  chapter: `You are a Professional Curriculum Designer for AI KISA Model School, Pakistan.
+Create detailed chapter content following Pakistani educational standards.
+
+OUTPUT FORMAT FOR SINGLE CHAPTER:
+
+**Chapter Title: [Name]**
+
+**Introduction**
+[2-3 sentences introducing the chapter topic and its importance]
+
+**Main Topics**
+1. [Topic Name]
+   - Subtopic A
+   - Subtopic B
+   - Subtopic C
+
+2. [Topic Name]
+   - Subtopic A
+   - Subtopic B
+
+**Learning Objectives**
+By the end of this chapter, students will be able to:
+1. [Objective 1]
+2. [Objective 2]
+3. [Objective 3]
+
+**Key Terms & Definitions**
+• Term 1: Definition
+• Term 2: Definition
+
+**Suggested Activities**
+1. [Activity description]
+2. [Activity description]
+
+**Assessment Questions**
+1. [Question]
+2. [Question]
+3. [Question]
+
+Ensure all content is comprehensive, age-appropriate, and follows Pakistani curriculum standards.`,
+
+  bulk: `You are a Professional Curriculum Designer for AI KISA Model School, Pakistan.
+Generate multiple chapter outlines for curriculum planning.
+
+OUTPUT FORMAT FOR BULK CHAPTERS:
+
+**Chapter 1: [Title]**
+Overview: [2-3 sentence description of chapter scope]
+Key Topics:
+• Topic 1
+• Topic 2
+• Topic 3
+• Topic 4
+
+**Chapter 2: [Title]**
+Overview: [2-3 sentence description]
+Key Topics:
+• Topic 1
+• Topic 2
+• Topic 3
+
+[Continue for all chapters...]
 
 RULES:
 - Chapters should follow logical progression
-- Topics should build upon each other
+- Each chapter should build on previous knowledge
+- Topics should cover the full scope of the subject
 - Age-appropriate content only
-- Cover the full scope of the subject for the grade level
-- Use clear, educational language`
+- Follow Pakistani educational standards`
 };
 
 serve(async (req) => {
@@ -71,9 +114,9 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+    if (!OPENROUTER_API_KEY) {
+      throw new Error("OPENROUTER_API_KEY is not configured");
     }
 
     // Get auth header
@@ -117,20 +160,21 @@ serve(async (req) => {
 
     // Build user message based on mode
     let userMessage = "";
-    const boardInfo = board ? `Board/Standard: ${board}` : "";
-    const mediumInfo = medium ? `Medium of instruction: ${medium}` : "Medium: English";
+    const boardInfo = board ? `Educational Board: ${board}` : "Educational Board: Punjab Board (Pakistan)";
+    const mediumInfo = medium ? `Medium of Instruction: ${medium}` : "Medium of Instruction: English";
     const detailInfo = detailLevel ? `Detail Level: ${detailLevel}` : "Detail Level: Standard";
 
     if (mode === "full") {
-      userMessage = `Generate a complete syllabus for:
+      userMessage = `Generate a complete academic syllabus for:
 
+School: AI KISA Model School
 Class/Grade: ${classLevel}
 Subject: ${subject}
 ${boardInfo}
 ${mediumInfo}
 ${detailInfo}
 
-Please create a comprehensive syllabus with chapters, topics, objectives, and keywords.`;
+Please create a comprehensive syllabus with chapters, topics, learning objectives, and key terms following Pakistani curriculum standards.`;
     } else if (mode === "chapter") {
       if (!chapterNumber && !chapterTitle) {
         return new Response(JSON.stringify({ error: "Chapter mode requires chapterNumber or chapterTitle" }), {
@@ -138,8 +182,9 @@ Please create a comprehensive syllabus with chapters, topics, objectives, and ke
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      userMessage = `Generate detailed content for:
+      userMessage = `Generate detailed chapter content for:
 
+School: AI KISA Model School
 Class/Grade: ${classLevel}
 Subject: ${subject}
 Chapter: ${chapterNumber ? `Chapter ${chapterNumber}` : ""}${chapterTitle ? ` - ${chapterTitle}` : ""}
@@ -147,41 +192,49 @@ ${boardInfo}
 ${mediumInfo}
 ${detailInfo}
 
-Please create comprehensive chapter content with topics, objectives, activities, and assessment questions.`;
+Please create comprehensive chapter content including topics, subtopics, objectives, definitions, activities, and assessment questions.`;
     } else if (mode === "bulk") {
       const chapCount = numberOfChapters || 10;
-      userMessage = `Generate ${chapCount} chapters for:
+      userMessage = `Generate ${chapCount} chapter outlines for:
 
+School: AI KISA Model School
 Class/Grade: ${classLevel}
 Subject: ${subject}
 ${boardInfo}
 ${mediumInfo}
 ${detailInfo}
 
-Please create ${chapCount} chapter titles with brief outlines and key topics for each.`;
+Please create ${chapCount} chapter titles with brief overviews and key topics for each, following Pakistani curriculum standards.`;
     }
 
     const systemPrompt = SYSTEM_PROMPTS[mode as keyof typeof SYSTEM_PROMPTS];
 
     console.log(`Generating ${mode} syllabus for Class ${classLevel} - ${subject}`);
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Call OpenRouter API with ChatGPT model
+    const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://ai-kisa-school.edu",
+        "X-Title": "AI KISA Syllabus Generator",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "openai/gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userMessage },
         ],
         stream,
+        temperature: 0.5,
       }),
     });
 
     if (!aiResponse.ok) {
+      const errorData = await aiResponse.json().catch(() => ({}));
+      console.error("OpenRouter API error:", aiResponse.status, errorData);
+      
       if (aiResponse.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
           status: 429,
@@ -189,14 +242,12 @@ Please create ${chapCount} chapter titles with brief outlines and key topics for
         });
       }
       if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add credits." }), {
+        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add credits to OpenRouter." }), {
           status: 402,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const errorText = await aiResponse.text();
-      console.error("AI gateway error:", aiResponse.status, errorText);
-      throw new Error("AI gateway error");
+      throw new Error(errorData.error?.message || "AI API error");
     }
 
     if (stream) {

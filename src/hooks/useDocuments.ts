@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTeacherProfile } from "./useTeacherProfile";
@@ -20,10 +21,30 @@ export interface Document {
   } | null;
 }
 
+export function isValidExtractedText(text?: string | null): boolean {
+  if (!text) return false;
+  const t = text.trim();
+  
+  // Must have reasonable content length
+  if (t.length < 30) return false;
+
+  // Common DOCX ZIP signatures / garbage previews
+  if (t.startsWith("PK")) return false;
+  if (t.includes("word/document.xml")) return false;
+
+  // Must contain letters in any language (including Urdu/Arabic)
+  if (!/\p{L}/u.test(t)) return false;
+
+  return true;
+}
+
 export function useDocuments() {
   const { data: profile } = useTeacherProfile();
+  const queryClient = useQueryClient();
+  const attemptedRef = useRef<Set<string>>(new Set());
+  const notifiedRef = useRef(false);
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ["documents", profile?.id],
     queryFn: async (): Promise<Document[]> => {
       if (!profile) return [];
@@ -50,6 +71,54 @@ export function useDocuments() {
     },
     enabled: !!profile,
   });
+
+  // Auto-fix old DOCX uploads - runs ONCE per session quietly
+  useEffect(() => {
+    if (!profile || !query.data || query.data.length === 0) return;
+
+    const candidates = query.data.filter((doc) => {
+      const isDocx =
+        doc.file_name.toLowerCase().endsWith(".docx") ||
+        doc.file_type.toLowerCase().includes("wordprocessingml") ||
+        doc.file_type.toLowerCase().includes("docx") ||
+        doc.file_type.toLowerCase().includes("msword") ||
+        doc.file_type.toLowerCase().includes("word");
+
+      if (!isDocx) return false;
+      return !isValidExtractedText(doc.extracted_content?.content);
+    });
+
+    if (candidates.length === 0) return;
+
+    // Process silently in background without blocking UI
+    void (async () => {
+      let processed = 0;
+      for (const doc of candidates) {
+        if (attemptedRef.current.has(doc.id)) continue;
+        attemptedRef.current.add(doc.id);
+
+        try {
+          await supabase.functions.invoke("extract-document", {
+            body: {
+              documentId: doc.id,
+              storagePath: doc.storage_path,
+              fileType: doc.file_type,
+            },
+          });
+          processed++;
+        } catch (e) {
+          console.error("Background re-extract failed:", doc.id, e);
+        }
+      }
+
+      // Only refresh if we actually processed something
+      if (processed > 0) {
+        queryClient.invalidateQueries({ queryKey: ["documents", profile.id] });
+      }
+    })();
+  }, [profile, query.data, queryClient]);
+
+  return query;
 }
 
 export function useUploadDocument() {

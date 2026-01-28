@@ -15,8 +15,10 @@ import { ShareQuizButton } from "@/components/quiz/ShareQuizButton";
 import { ContentPreviewModal } from "@/components/content/ContentPreviewModal";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function History() {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const { data: syllabusHistory = [], isLoading: syllabusLoading, refetch: refetchSyllabus } = useSyllabusHistory();
   const { data: quizHistory = [], isLoading: quizLoading, refetch: refetchQuiz } = useQuizHistory();
@@ -77,9 +79,9 @@ export default function History() {
               <HistoryIcon className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h1 className="font-display text-3xl font-bold text-foreground">History</h1>
+              <h1 className="font-display text-3xl font-bold text-foreground">{t("history.title")}</h1>
               <p className="text-muted-foreground">
-                View, edit, and download your previously generated content
+                {t("history.subtitle")}
               </p>
             </div>
           </div>
@@ -89,11 +91,11 @@ export default function History() {
           <TabsList className="grid w-full max-w-md grid-cols-2 bg-primary/5">
             <TabsTrigger value="lessons" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <FileText className="h-4 w-4" />
-              Lesson Plans ({syllabusHistory.length})
+              {t("history.lessonPlans")} ({syllabusHistory.length})
             </TabsTrigger>
             <TabsTrigger value="quizzes" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <FileQuestion className="h-4 w-4" />
-              Quizzes ({quizHistory.length})
+              {t("history.quizzes")} ({quizHistory.length})
             </TabsTrigger>
           </TabsList>
 
@@ -101,15 +103,14 @@ export default function History() {
           <TabsContent value="lessons" className="mt-6">
             {syllabusLoading ? (
               <Card className="p-8 text-center border-primary/10">
-                <p className="text-muted-foreground">Loading...</p>
+                <p className="text-muted-foreground">{t("common.loading")}</p>
               </Card>
             ) : syllabusHistory.length === 0 ? (
               <Card className="p-8 text-center border-primary/10">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 mx-auto mb-4">
                   <FileText className="h-8 w-8 text-primary/50" />
                 </div>
-                <p className="text-muted-foreground">No lesson plans generated yet.</p>
-                <p className="text-sm text-muted-foreground">Go to Syllabus to create your first lesson plan.</p>
+                <p className="text-muted-foreground">{t("history.noLessonPlans")}</p>
               </Card>
             ) : (
               <div className="grid gap-4">
@@ -181,15 +182,14 @@ export default function History() {
           <TabsContent value="quizzes" className="mt-6">
             {quizLoading ? (
               <Card className="p-8 text-center border-primary/10">
-                <p className="text-muted-foreground">Loading...</p>
+                <p className="text-muted-foreground">{t("common.loading")}</p>
               </Card>
             ) : quizHistory.length === 0 ? (
               <Card className="p-8 text-center border-primary/10">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 mx-auto mb-4">
                   <FileQuestion className="h-8 w-8 text-accent/50" />
                 </div>
-                <p className="text-muted-foreground">No quizzes generated yet.</p>
-                <p className="text-sm text-muted-foreground">Go to Quiz Generator to create your first quiz.</p>
+                <p className="text-muted-foreground">{t("history.noQuizzes")}</p>
               </Card>
             ) : (
               <div className="grid gap-4">

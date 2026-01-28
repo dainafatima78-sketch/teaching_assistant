@@ -19,9 +19,9 @@ serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+    if (!OPENROUTER_API_KEY) {
+      throw new Error("OPENROUTER_API_KEY is not configured");
     }
 
     // Get the audio data from form data or JSON
@@ -51,33 +51,39 @@ serve(async (req) => {
       });
     }
 
-    // Use Gemini for audio transcription
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Use OpenRouter with GPT-4o for audio transcription
+    const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://ai-kisa-school.edu",
+        "X-Title": "AI KISA Voice Transcriber",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "openai/gpt-4o-mini",
         messages: [
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `Transcribe this audio recording. Follow these rules strictly:
+                text: `You are a Professional Voice Transcriber for AI KISA Model School, Pakistan.
 
-1. Return ONLY the transcribed text, nothing else.
-2. If the speaker is speaking in Urdu, Hindi, or any South Asian language, you MUST write the transcription in ROMAN URDU (using English/Latin alphabet).
+TASK: Transcribe this audio recording accurately.
+
+TRANSCRIPTION RULES:
+1. Return ONLY the transcribed text - no explanations or commentary
+2. If the speaker is speaking in Urdu, Hindi, or any South Asian language, transcribe in ROMAN URDU (Latin alphabet)
 3. Examples of Roman Urdu:
    - "Mujhe yeh samajh nahi aaya" (NOT مجھے یہ سمجھ نہیں آیا)
    - "Aap kaise hain?" (NOT آپ کیسے ہیں؟)
    - "Main aaj school gaya tha" (NOT میں آج سکول گیا تھا)
-4. Do NOT use Devanagari (Hindi script) or Arabic/Urdu script.
-5. Always use English alphabet letters (a-z) for transcription.
-6. If the audio is in English, transcribe normally in English.
-7. If audio is unclear, do your best to transcribe what you can hear.`
+4. Do NOT use Devanagari (Hindi script) or Arabic/Urdu script
+5. Always use English alphabet letters (a-z) for transcription
+6. If the audio is in English, transcribe normally in English
+7. If audio is unclear, transcribe what you can hear clearly
+8. Maintain proper punctuation and sentence structure`
               },
               {
                 type: "image_url",
@@ -88,12 +94,13 @@ serve(async (req) => {
             ]
           }
         ],
+        temperature: 0.3,
       }),
     });
 
     if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error("AI transcription error:", errorText);
+      const errorData = await aiResponse.json().catch(() => ({}));
+      console.error("OpenRouter transcription error:", errorData);
       
       if (aiResponse.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again." }), {

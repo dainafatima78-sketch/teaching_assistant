@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { useDocuments } from "@/hooks/useDocuments";
+import { isValidExtractedText } from "@/hooks/useDocuments";
 import { useChapters, useChaptersByGrade } from "@/hooks/useChapters";
 import { useTeachingAssistant } from "@/hooks/useTeachingAssistant";
 import { useSaveQuizHistory } from "@/hooks/useHistory";
@@ -16,8 +17,10 @@ import { toast } from "sonner";
 import { DownloadButtons } from "@/components/syllabus/DownloadButtons";
 import { ShareQuizButton } from "@/components/quiz/ShareQuizButton";
 import { ContentPreviewModal } from "@/components/content/ContentPreviewModal";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function QuizGenerator() {
+  const { t } = useLanguage();
   const { data: documents = [], isLoading: docsLoading } = useDocuments();
   const { generate, isLoading, content, reset } = useTeachingAssistant();
   const saveQuiz = useSaveQuizHistory();
@@ -48,12 +51,8 @@ export default function QuizGenerator() {
   
   const availableChapters = selectedDocId ? documentChapters : gradeChapters;
 
-  // Filter documents by selected grade
-  const filteredDocs = selectedGrade 
-    ? documents.filter(d => d.class_level === selectedGrade)
-    : documents;
-
-  const processedDocs = filteredDocs.filter(doc => doc.extracted_content);
+  // Filter documents - show all with extracted content
+  const readyDocs = documents.filter((doc) => isValidExtractedText(doc.extracted_content?.content));
 
   // Auto-fill when document is selected
   const handleDocumentSelect = (docId: string) => {
@@ -189,9 +188,9 @@ export default function QuizGenerator() {
               <FileQuestion className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h1 className="font-display text-3xl font-bold text-foreground">Quiz Generator</h1>
+              <h1 className="font-display text-3xl font-bold text-foreground">{t("quiz.title")}</h1>
               <p className="text-muted-foreground">
-                Generate MCQs, short questions, and long questions from your syllabus
+                {t("quiz.subtitle")}
               </p>
             </div>
           </div>
@@ -203,23 +202,23 @@ export default function QuizGenerator() {
             <CardHeader className="bg-primary/5 rounded-t-lg">
               <CardTitle className="flex items-center gap-2 text-primary">
                 <FileQuestion className="h-5 w-5" />
-                Quiz Settings
+                {t("quiz.settings")}
               </CardTitle>
               <CardDescription>
-                Configure your quiz parameters
+                {t("quiz.settingsDesc")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 pt-6">
               {/* Grade Selection */}
               <div className="space-y-2">
-                <Label>Class/Grade <span className="text-destructive">*</span></Label>
+                <Label>{t("quiz.classGrade")} <span className="text-destructive">*</span></Label>
                 <Select value={selectedGrade} onValueChange={(v) => {
                   setSelectedGrade(v);
                   setSelectedDocId("");
                   setSelectedChapters([]);
                 }}>
                   <SelectTrigger className="border-primary/20 focus:border-primary">
-                    <SelectValue placeholder="Select class" />
+                    <SelectValue placeholder={t("common.selectClass")} />
                   </SelectTrigger>
                   <SelectContent>
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (
@@ -230,31 +229,35 @@ export default function QuizGenerator() {
               </div>
 
               {/* Document Selection */}
-              {selectedGrade && (
-                <div className="space-y-2">
-                  <Label>Syllabus Document <span className="text-destructive">*</span></Label>
-                  <Select value={selectedDocId} onValueChange={handleDocumentSelect}>
-                    <SelectTrigger className="border-primary/20 focus:border-primary">
-                      <SelectValue placeholder={docsLoading ? "Loading..." : processedDocs.length === 0 ? "No documents for this grade" : "Select document"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {processedDocs.map((doc) => (
+              <div className="space-y-2">
+                <Label>{t("quiz.syllabusDocument")} <span className="text-destructive">*</span></Label>
+                <Select value={selectedDocId} onValueChange={handleDocumentSelect} disabled={docsLoading}>
+                  <SelectTrigger className="border-primary/20 focus:border-primary">
+                    <SelectValue placeholder={docsLoading ? t("common.loading") : t("common.selectDocument")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {readyDocs.length === 0 && !docsLoading ? (
+                      <SelectItem value="_none" disabled>
+                        {t("common.noDocuments")}
+                      </SelectItem>
+                    ) : (
+                      readyDocs.map((doc) => (
                         <SelectItem key={doc.id} value={doc.id}>
-                          {doc.file_name}
+                          {doc.file_name} {doc.class_level ? `(Class ${doc.class_level})` : ""}
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
 
               {/* Chapter Selection */}
               {availableChapters.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label>Chapters (Optional)</Label>
+                    <Label>{t("quiz.chapters")}</Label>
                     <Button variant="ghost" size="sm" onClick={selectAllChapters} className="text-primary">
-                      {selectedChapters.length === availableChapters.length ? "Deselect All" : "Select All"}
+                      {selectedChapters.length === availableChapters.length ? t("quiz.deselectAll") : t("quiz.selectAll")}
                     </Button>
                   </div>
                   <div className="max-h-32 overflow-y-auto space-y-2 border border-primary/20 rounded-lg p-3">
@@ -436,7 +439,7 @@ export default function QuizGenerator() {
                     />
                   ) : (
                     <div className="bg-secondary/50 rounded-lg p-6 max-h-[500px] overflow-y-auto border border-primary/10">
-                      <div className="prose prose-sm max-w-none whitespace-pre-wrap text-foreground">
+                      <div className="prose prose-sm max-w-none whitespace-pre-wrap text-foreground font-urdu leading-relaxed" dir="auto">
                         {editedContent || content}
                       </div>
                     </div>

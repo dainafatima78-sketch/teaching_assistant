@@ -25,6 +25,26 @@ interface Quiz {
   teacher_id: string;
 }
 
+// Strip answer key section from quiz content for student view
+function stripAnswerKey(content: string): string {
+  // Common patterns for answer key sections
+  const patterns = [
+    /={3,}\s*ANSWER\s*KEY.*$/is,
+    /---+\s*ANSWER\s*KEY.*$/is,
+    /\n\s*ANSWER\s*KEY\s*\(FOR\s*TEACHER.*$/is,
+    /\n\s*ANSWER\s*KEY.*$/is,
+    /\n\s*ANSWERS?\s*:\s*\n.*$/is,
+    /MCQs?\s*:\s*Q\d+-\[?[A-D]\]?.*$/is,
+  ];
+  
+  let result = content;
+  for (const pattern of patterns) {
+    result = result.replace(pattern, '');
+  }
+  
+  return result.trim();
+}
+
 interface ParsedQuestion {
   id: string;
   type: "mcq" | "short" | "long";
@@ -346,11 +366,11 @@ export default function TakeQuiz() {
           </CardContent>
         </Card>
 
-        {/* Quiz Content */}
+        {/* Quiz Content - Hide answer key from students */}
         <Card className="mb-6 border-primary/20">
           <CardContent className="pt-6">
-            <div className="bg-secondary/30 rounded-lg p-4 max-h-96 overflow-y-auto whitespace-pre-wrap text-sm">
-              {quiz?.content}
+            <div className="bg-secondary/30 rounded-lg p-4 max-h-96 overflow-y-auto whitespace-pre-wrap text-sm font-urdu leading-relaxed" dir="auto">
+              {quiz?.content ? stripAnswerKey(quiz.content) : ""}
             </div>
           </CardContent>
         </Card>

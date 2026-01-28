@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDocuments } from "@/hooks/useDocuments";
+import { isValidExtractedText } from "@/hooks/useDocuments";
 import { useTeachingAssistant } from "@/hooks/useTeachingAssistant";
 import { toast } from "sonner";
 
@@ -17,22 +18,34 @@ export default function HomeworkHelp() {
   const [selectedDocId, setSelectedDocId] = useState("");
   const [question, setQuestion] = useState("");
 
-  // Filter to only show documents with extracted content
-  const processedDocs = documents.filter(doc => doc.extracted_content);
+  const readyDocs = documents.filter((doc) => isValidExtractedText(doc.extracted_content?.content));
+  const pendingDocs = documents.filter(
+    (doc) => !!doc.extracted_content && !isValidExtractedText(doc.extracted_content?.content)
+  );
 
   const handleExplain = async () => {
-    if (!question.trim()) return;
+    if (!question.trim()) {
+      toast.error("Please enter a question");
+      return;
+    }
     if (!selectedDocId) {
       toast.error("Please select a syllabus document first");
       return;
     }
 
+    const selectedDoc = readyDocs.find(d => d.id === selectedDocId);
+    console.log("Starting homework help for document:", selectedDocId, selectedDoc?.file_name);
+
     reset();
-    await generate({
+    const result = await generate({
       type: "homework",
       documentId: selectedDocId,
       userMessage: question,
     });
+
+    if (result) {
+      console.log("Homework explanation received, length:", result.length);
+    }
   };
 
   const handleCopy = () => {
@@ -64,16 +77,25 @@ export default function HomeworkHelp() {
                       <SelectValue placeholder={docsLoading ? "Loading documents..." : "Select document"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {processedDocs.length === 0 ? (
+                      {readyDocs.length === 0 ? (
                         <SelectItem value="_none" disabled>
-                          No processed documents. Upload syllabus first.
+                          {pendingDocs.length > 0
+                            ? "Documents are being processed… please wait."
+                            : "No processed documents. Upload syllabus first."}
                         </SelectItem>
                       ) : (
-                        processedDocs.map((doc) => (
-                          <SelectItem key={doc.id} value={doc.id}>
-                            {doc.file_name}
-                          </SelectItem>
-                        ))
+                        <>
+                          {readyDocs.map((doc) => (
+                            <SelectItem key={doc.id} value={doc.id}>
+                              {doc.file_name}
+                            </SelectItem>
+                          ))}
+                          {pendingDocs.map((doc) => (
+                            <SelectItem key={doc.id} value={`pending-${doc.id}`} disabled>
+                              {doc.file_name} (processing…)
+                            </SelectItem>
+                          ))}
+                        </>
                       )}
                     </SelectContent>
                   </Select>

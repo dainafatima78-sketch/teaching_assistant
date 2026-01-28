@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { BookOpen, Loader2, Sparkles, Copy, Eye } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { BookOpen, Loader2, Sparkles, Copy } from "lucide-react";
+import { useSaveSyllabusHistory } from "@/hooks/useHistory";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,9 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useDocuments } from "@/hooks/useDocuments";
+import { isValidExtractedText } from "@/hooks/useDocuments";
 import { useTeachingAssistant } from "@/hooks/useTeachingAssistant";
 import { toast } from "sonner";
 import { ContentPreviewModal } from "@/components/content/ContentPreviewModal";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 // Clean markdown formatting for display
 function cleanMarkdown(text: string): string {
@@ -29,8 +32,10 @@ function cleanMarkdown(text: string): string {
 }
 
 export default function LessonPlans() {
+  const { t } = useLanguage();
   const { data: documents = [], isLoading: docsLoading } = useDocuments();
   const { generate, isLoading, content, reset } = useTeachingAssistant();
+  const saveSyllabusHistory = useSaveSyllabusHistory();
 
   const [selectedDocId, setSelectedDocId] = useState("");
   const [classLevel, setClassLevel] = useState("");
@@ -38,9 +43,29 @@ export default function LessonPlans() {
   const [chapterName, setChapterName] = useState("");
   const [duration, setDuration] = useState("45");
   const [additionalNotes, setAdditionalNotes] = useState("");
+  const hasSavedRef = useRef(false);
 
-  // Filter to only show documents with extracted content
-  const processedDocs = documents.filter(doc => doc.extracted_content);
+  // Auto-save when content is generated
+  useEffect(() => {
+    if (content && !isLoading && !hasSavedRef.current) {
+      hasSavedRef.current = true;
+      saveSyllabusHistory.mutate({
+        document_id: selectedDocId || null,
+        subject: subject || null,
+        class_level: classLevel || null,
+        title: `${t("lessonPlan.title")} - ${subject || "General"} - Class ${classLevel}`,
+        content: content,
+        chapters: chapterName ? [chapterName] : null,
+        metadata: {
+          type: "lesson_plan",
+          duration: parseInt(duration) || 45,
+          additionalNotes,
+        },
+      });
+    }
+  }, [content, isLoading]);
+
+  const readyDocs = documents.filter((doc) => isValidExtractedText(doc.extracted_content?.content));
 
   const handleGenerate = async () => {
     if (!selectedDocId) {
@@ -48,6 +73,7 @@ export default function LessonPlans() {
       return;
     }
 
+    hasSavedRef.current = false; // Reset for new generation
     reset();
     await generate({
       type: "lesson_plan",
@@ -70,9 +96,9 @@ export default function LessonPlans() {
       <div className="max-w-5xl mx-auto space-y-8">
         {/* Header */}
         <div className="animate-fade-in">
-          <h1 className="font-display text-3xl font-bold text-foreground">Lesson Plan Generator</h1>
+          <h1 className="font-display text-3xl font-bold text-foreground">{t("lessonPlan.title")}</h1>
           <p className="mt-2 text-muted-foreground">
-            Create detailed lesson plans based on your uploaded syllabus content.
+            {t("lessonPlan.subtitle")}
           </p>
         </div>
 
@@ -82,27 +108,27 @@ export default function LessonPlans() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BookOpen className="h-5 w-5 text-primary" />
-                Lesson Details
+                {t("lessonPlan.details")}
               </CardTitle>
               <CardDescription>
-                Fill in the details to generate a customized lesson plan
+                {t("lessonPlan.detailsDesc")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Document Selection */}
               <div className="space-y-2">
-                <Label>Syllabus Document *</Label>
-                <Select value={selectedDocId} onValueChange={setSelectedDocId}>
+                <Label>{t("lessonPlan.syllabusDocument")} *</Label>
+                <Select value={selectedDocId} onValueChange={setSelectedDocId} disabled={docsLoading}>
                   <SelectTrigger>
-                    <SelectValue placeholder={docsLoading ? "Loading..." : "Select document"} />
+                    <SelectValue placeholder={docsLoading ? t("common.loading") : t("common.selectDocument")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {processedDocs.length === 0 ? (
+                    {readyDocs.length === 0 && !docsLoading ? (
                       <SelectItem value="_none" disabled>
-                        No processed documents. Upload syllabus first.
+                        {t("common.noDocuments")}
                       </SelectItem>
                     ) : (
-                      processedDocs.map((doc) => (
+                      readyDocs.map((doc) => (
                         <SelectItem key={doc.id} value={doc.id}>
                           {doc.file_name}
                         </SelectItem>
@@ -113,10 +139,10 @@ export default function LessonPlans() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="class">Class Level</Label>
+                <Label htmlFor="class">{t("lessonPlan.classLevel")}</Label>
                 <Select value={classLevel} onValueChange={setClassLevel}>
                   <SelectTrigger id="class">
-                    <SelectValue placeholder="Select class" />
+                    <SelectValue placeholder={t("common.selectClass")} />
                   </SelectTrigger>
                   <SelectContent>
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
@@ -127,10 +153,10 @@ export default function LessonPlans() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="subject">Subject</Label>
+                <Label htmlFor="subject">{t("syllabus.subject")}</Label>
                 <Select value={subject} onValueChange={setSubject}>
                   <SelectTrigger id="subject">
-                    <SelectValue placeholder="Select subject" />
+                    <SelectValue placeholder={t("common.selectSubject")} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Mathematics">Mathematics</SelectItem>
@@ -151,7 +177,7 @@ export default function LessonPlans() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="chapter">Chapter / Topic</Label>
+                <Label htmlFor="chapter">{t("lessonPlan.chapterTopic")}</Label>
                 <Input 
                   id="chapter" 
                   placeholder="e.g., Introduction to Algebra" 
@@ -161,7 +187,7 @@ export default function LessonPlans() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="duration">Duration (minutes)</Label>
+                <Label htmlFor="duration">{t("lessonPlan.duration")}</Label>
                 <Input 
                   id="duration" 
                   type="number" 
@@ -172,7 +198,7 @@ export default function LessonPlans() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="notes">Additional Notes (Optional)</Label>
+                <Label htmlFor="notes">{t("lessonPlan.additionalNotes")}</Label>
                 <Textarea 
                   id="notes" 
                   placeholder="Any specific requirements or focus areas..."
@@ -192,12 +218,12 @@ export default function LessonPlans() {
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating...
+                    {t("common.loading")}
                   </>
                 ) : (
                   <>
                     <Sparkles className="mr-2 h-4 w-4" />
-                    Generate Lesson Plan
+                    {t("lessonPlan.generate")}
                   </>
                 )}
               </Button>
@@ -209,16 +235,16 @@ export default function LessonPlans() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Generated Lesson Plan</CardTitle>
+                  <CardTitle>{t("lessonPlan.generatedTitle")}</CardTitle>
                   <CardDescription>
-                    Your AI-generated lesson plan will appear here
+                    {t("lessonPlan.generatedDesc")}
                   </CardDescription>
                 </div>
                 {content && (
                   <div className="flex gap-2">
                     <ContentPreviewModal
                       content={content}
-                      title={`Lesson Plan - ${subject || "General"} - Class ${classLevel}`}
+                      title={`${t("lessonPlan.title")} - ${subject || "General"} - Class ${classLevel}`}
                       type="LessonPlan"
                       classLevel={classLevel}
                       subject={subject}
@@ -226,7 +252,7 @@ export default function LessonPlans() {
                     />
                     <Button variant="outline" size="sm" onClick={handleCopy}>
                       <Copy className="h-4 w-4 mr-2" />
-                      Copy
+                      {t("common.copy")}
                     </Button>
                   </div>
                 )}
@@ -243,21 +269,20 @@ export default function LessonPlans() {
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={handleCopy}>
                       <Copy className="h-4 w-4 mr-2" />
-                      Copy to Clipboard
+                      {t("common.copy")}
                     </Button>
                   </div>
                 </div>
               ) : isLoading ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <Loader2 className="h-12 w-12 mb-4 text-primary animate-spin" />
-                  <p className="text-muted-foreground">Generating lesson plan...</p>
-                  <p className="text-sm text-muted-foreground">This may take a moment</p>
+                  <p className="text-muted-foreground">{t("common.loading")}</p>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
                   <BookOpen className="h-12 w-12 mb-4 opacity-50" />
-                  <p>Select a syllabus and fill in the details</p>
-                  <p className="text-sm">Your lesson plan will appear here</p>
+                  <p>{t("lessonPlan.selectAndFill")}</p>
+                  <p className="text-sm">{t("lessonPlan.willAppear")}</p>
                 </div>
               )}
             </CardContent>

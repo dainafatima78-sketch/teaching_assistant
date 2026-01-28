@@ -1,41 +1,64 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { unzipSync } from "https://esm.sh/fflate@0.8.2?deno";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Simple XML/DOCX text extractor - extracts text from DOCX without external libraries
+// Proper DOCX extractor: unzip -> word/document.xml -> parse <w:t> nodes.
 function extractTextFromDocx(arrayBuffer: ArrayBuffer): string {
   try {
-    const uint8Array = new Uint8Array(arrayBuffer);
-    const text = new TextDecoder().decode(uint8Array);
-    
-    // DOCX files are ZIP archives containing XML
-    // Try to find and extract text from document.xml patterns
-    const textMatches: string[] = [];
-    
-    // Look for text content between XML tags
-    const regex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
-    let match;
-    while ((match = regex.exec(text)) !== null) {
-      if (match[1]) {
-        textMatches.push(match[1]);
+    const zipBytes = new Uint8Array(arrayBuffer);
+    const unzipped = unzipSync(zipBytes);
+
+    // Most DOCX text lives here
+    const documentXmlBytes = unzipped["word/document.xml"] as Uint8Array | undefined;
+    if (!documentXmlBytes) return "";
+
+    const xml = new TextDecoder("utf-8").decode(documentXmlBytes);
+
+    // Preserve basic structure: paragraphs + line breaks + tabs
+    // We'll stream through relevant tokens so we can keep newlines.
+    const tokenRe = /(<\/w:p>|<w:br\b[^>]*\/?>|<w:tab\b[^>]*\/?>|<w:t\b[^>]*>[^<]*<\/w:t>)/g;
+    const textParts: string[] = [];
+    let m: RegExpExecArray | null;
+
+    while ((m = tokenRe.exec(xml)) !== null) {
+      const token = m[1];
+      if (token.startsWith("</w:p")) {
+        textParts.push("\n");
+        continue;
+      }
+      if (token.startsWith("<w:br")) {
+        textParts.push("\n");
+        continue;
+      }
+      if (token.startsWith("<w:tab")) {
+        textParts.push("\t");
+        continue;
+      }
+      if (token.startsWith("<w:t")) {
+        const inner = token
+          .replace(/^<w:t\b[^>]*>/, "")
+          .replace(/<\/w:t>$/, "");
+        if (inner) textParts.push(inner);
       }
     }
-    
-    if (textMatches.length > 0) {
-      return textMatches.join(" ");
-    }
-    
-    // Fallback: extract any readable text
-    const readableText = text.replace(/[^\x20-\x7E\n\r\t]/g, " ")
-      .replace(/\s+/g, " ")
+
+    const raw = textParts.join("");
+    const normalized = raw
+      .replace(/\r/g, "")
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
       .trim();
-    
-    return readableText.length > 100 ? readableText : "";
+
+    // Sanity check: avoid storing ZIP noise
+    if (normalized.length < 50) return "";
+    return normalized;
   } catch (e) {
     console.error("DOCX extraction error:", e);
     return "";
@@ -96,9 +119,9 @@ serve(async (req) => {
     let extractedText = "";
     const fileTypeLower = (fileType || "").toLowerCase();
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+    if (!OPENROUTER_API_KEY) {
+      throw new Error("OPENROUTER_API_KEY is not configured");
     }
 
     // For text files, extract directly (fastest)
@@ -106,53 +129,19 @@ serve(async (req) => {
       extractedText = await fileData.text();
       console.log(`Text file extracted in ${Date.now() - startTime}ms`);
     } 
-    // For DOCX - try direct extraction first (faster than AI)
+    // For DOCX - unzip + XML extraction (reliable)
     else if (fileTypeLower.includes("docx") || fileTypeLower.includes("wordprocessingml")) {
       const arrayBuffer = await fileData.arrayBuffer();
       extractedText = extractTextFromDocx(arrayBuffer);
-      
-      // If direct extraction failed, use AI with text representation
-      if (!extractedText || extractedText.length < 50) {
-        console.log("Direct DOCX extraction failed, using AI...");
-        const base64 = arrayBufferToBase64(arrayBuffer);
-        
-        // For DOCX, we'll send raw bytes and ask AI to interpret
-        const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash-lite",
-            messages: [
-              {
-                role: "user",
-                content: `This is a base64 encoded DOCX file. Extract any readable text content from it. The file contains educational/syllabus content.
-
-Base64 content (first 10000 chars): ${base64.substring(0, 10000)}
-
-Extract and return all readable text, preserving structure. If you cannot extract text, return an empty response.`
-              }
-            ],
-            max_tokens: 8000,
-          }),
-        });
-
-        if (aiResponse.ok) {
-          const aiData = await aiResponse.json();
-          extractedText = aiData.choices?.[0]?.message?.content || "";
-        }
-      }
       console.log(`DOCX extracted in ${Date.now() - startTime}ms`);
     }
-    // For PDF and images - use Gemini vision (supports these formats)
+    // For PDF and images - use GPT-4o vision
     else {
       const arrayBuffer = await fileData.arrayBuffer();
       const base64 = arrayBufferToBase64(arrayBuffer);
       
-      // Determine MIME type - only use supported types
-      let mimeType = "image/png"; // Default fallback
+      // Determine MIME type
+      let mimeType = "image/png";
       if (fileTypeLower.includes("pdf")) {
         mimeType = "application/pdf";
       } else if (fileTypeLower.includes("jpg") || fileTypeLower.includes("jpeg")) {
@@ -165,24 +154,36 @@ Extract and return all readable text, preserving structure. If you cannot extrac
         mimeType = "image/gif";
       }
 
-      console.log(`Using AI extraction for ${mimeType}`);
+      console.log(`Using OpenRouter AI extraction for ${mimeType}`);
 
-      // Use faster model for extraction
-      const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      // Use OpenRouter with GPT-4o for vision extraction
+      const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
           "Content-Type": "application/json",
+          "HTTP-Referer": "https://ai-kisa-school.edu",
+          "X-Title": "AI KISA Document Extractor",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-lite",
+          model: "openai/gpt-4o-mini",
           messages: [
             {
               role: "user",
               content: [
                 {
                   type: "text",
-                  text: `Extract ALL text from this document. Preserve structure with headings and paragraphs. Return ONLY the text, no commentary.`
+                  text: `You are a Professional Document Extractor for AI KISA Model School.
+
+TASK: Extract ALL text from this educational document.
+
+INSTRUCTIONS:
+- Extract complete text preserving structure
+- Maintain headings, subheadings, and formatting
+- Include all questions, answers, and educational content
+- Preserve numbered lists and bullet points
+
+Return ONLY the extracted text without any commentary.`
                 },
                 {
                   type: "image_url",
@@ -194,12 +195,13 @@ Extract and return all readable text, preserving structure. If you cannot extrac
             }
           ],
           max_tokens: 8000,
+          temperature: 0.3,
         }),
       });
 
       if (!aiResponse.ok) {
-        const errorText = await aiResponse.text();
-        console.error("AI extraction error:", errorText);
+        const errorData = await aiResponse.json().catch(() => ({}));
+        console.error("OpenRouter extraction error:", errorData);
         throw new Error("Failed to extract text from document");
       }
 

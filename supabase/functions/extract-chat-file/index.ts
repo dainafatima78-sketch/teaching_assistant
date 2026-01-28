@@ -11,9 +11,9 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+    if (!OPENROUTER_API_KEY) {
+      throw new Error("OPENROUTER_API_KEY is not configured");
     }
 
     const authHeader = req.headers.get("Authorization");
@@ -37,27 +37,59 @@ serve(async (req) => {
     let contentType = mimeType;
 
     if (fileType === "image") {
-      prompt = `Extract all text from this image. If there are any questions, equations, or educational content, include them clearly. Return only the extracted text without any commentary.`;
+      prompt = `You are a Professional Document Extractor for AI KISA Model School.
+
+TASK: Extract all text content from this image accurately.
+
+INSTRUCTIONS:
+- Extract ALL visible text including questions, equations, diagrams labels
+- Preserve the original structure and formatting
+- If there are numbered questions, maintain the numbering
+- Include any mathematical equations or formulas
+- Note any diagrams or figures with brief descriptions
+
+OUTPUT: Return only the extracted text without any commentary or explanations.`;
       if (!contentType) contentType = "image/jpeg";
     } else if (fileType === "pdf") {
-      prompt = `This is a PDF document. Extract all readable text content from it. Preserve the structure and formatting as much as possible. Return only the extracted text.`;
+      prompt = `You are a Professional Document Extractor for AI KISA Model School.
+
+TASK: Extract all readable text from this PDF document.
+
+INSTRUCTIONS:
+- Extract complete text content preserving structure
+- Maintain headings, subheadings, and formatting
+- Include all questions, answers, and educational content
+- Preserve numbered lists and bullet points
+
+OUTPUT: Return only the extracted text without commentary.`;
       contentType = "application/pdf";
     } else if (fileType === "docx") {
-      prompt = `This is a Word document. Extract all text content from it. Preserve headings and structure. Return only the extracted text.`;
+      prompt = `You are a Professional Document Extractor for AI KISA Model School.
+
+TASK: Extract all text from this Word document.
+
+INSTRUCTIONS:
+- Extract complete text preserving structure
+- Maintain headings and formatting hierarchy
+- Include all educational content
+
+OUTPUT: Return only the extracted text.`;
       contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     } else {
-      prompt = `Extract all text content from this file. Return only the extracted text.`;
+      prompt = `Extract all text content from this file accurately. Return only the extracted text.`;
     }
 
-    // Use Gemini with vision capability for file extraction
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Use OpenRouter with GPT-4o for vision capability
+    const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://ai-kisa-school.edu",
+        "X-Title": "AI KISA Document Extractor",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "openai/gpt-4o-mini",
         messages: [
           {
             role: "user",
@@ -72,10 +104,14 @@ serve(async (req) => {
             ],
           },
         ],
+        temperature: 0.3,
       }),
     });
 
     if (!aiResponse.ok) {
+      const errorData = await aiResponse.json().catch(() => ({}));
+      console.error("OpenRouter API error:", aiResponse.status, errorData);
+      
       if (aiResponse.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded" }), {
           status: 429,
@@ -88,8 +124,6 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const errorText = await aiResponse.text();
-      console.error("AI gateway error:", aiResponse.status, errorText);
       throw new Error("Failed to process file");
     }
 

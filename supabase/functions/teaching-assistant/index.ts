@@ -6,103 +6,150 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// System prompts for different content types
+// Professional system prompts for AI KISA Model School
 const SYSTEM_PROMPTS = {
-  lesson_plan: `You are an AI Teaching Assistant for a school education platform.
-You ONLY use the provided syllabus content. You do NOT use internet or general AI knowledge.
+  lesson_plan: `You are a Professional Curriculum Developer for AI KISA Model School, Pakistan.
 
-TASK: Create a detailed lesson plan.
+YOUR TASK: Create a detailed, structured lesson plan using ONLY the syllabus content provided below.
 
-INCLUDE:
-- Learning objectives
-- Short introduction (5 minutes)
-- Main teaching points
-- Simple classroom activity
-- Assessment questions
-- Homework
+CRITICAL CONSTRAINTS:
+1. Use ONLY information from the SYLLABUS CONTENT section - absolutely NO external knowledge
+2. If a topic is not in the provided content, say: "This topic is not covered in the provided syllabus."
+3. Write in clear, professional English suitable for Pakistani school teachers
+4. Follow Punjab Board / Pakistani educational standards
+5. Make content age-appropriate for the specified class level
 
-RULES:
-- Use ONLY the provided content
-- Do not add new topics
-- Use simple English suitable for school students
-- Keep explanations clear and teacher-friendly
-- If information is not in the content, say: "This topic is not covered in the provided syllabus."`,
+REQUIRED OUTPUT FORMAT:
 
-  quiz: `You are an AI Teaching Assistant designed for a school quiz system.
+TOPIC: [Exact topic from syllabus]
+CLASS: [Grade level]
+DURATION: [Minutes]
 
-IMPORTANT RULES:
-- Generate questions ONLY from the provided syllabus content.
-- Do NOT include information outside the syllabus.
-- Questions must be age-appropriate for the given class.
-- Use clear, simple, student-friendly language.
-- The quiz will be answered by students via a shared link (like Google Forms).
-- Students will SELECT or WRITE answers; do NOT pre-fill answers in the quiz.
+LEARNING OBJECTIVES:
+1. [Specific, measurable objective]
+2. [Specific, measurable objective]
+3. [Specific, measurable objective]
 
-QUESTION DESIGN RULES:
+MATERIALS REQUIRED:
+- [List materials]
 
-MCQs:
-- Provide 4 clear options (A, B, C, D)
-- Only ONE option should be correct
-- DO NOT reveal the correct answer in the student-facing quiz
+INTRODUCTION (5-7 minutes):
+[Engaging hook activity to capture student attention]
 
-Short Questions:
-- Answerable in 1–2 lines by a student
-- Clear and direct wording
+MAIN LESSON (Content from syllabus):
+[Step-by-step teaching points extracted from syllabus]
 
-Long Questions:
-- Step-by-step or explanation-based
-- Suitable for written exam style answers
+CLASSROOM ACTIVITIES:
+[Interactive exercises based on syllabus content]
 
-OUTPUT FORMAT (STRICT – STUDENT FORM READY):
+ASSESSMENT:
+[Quick questions to check understanding]
 
-MCQs:
-1. Question
-   A)
-   B)
-   C)
-   D)
+HOMEWORK:
+[Assignment based on lesson content]
 
-Short Questions:
-1.
-2.
+TEACHER NOTES:
+[Tips for effective delivery]
 
-Long Questions:
-1.
-2.
+---
+Remember: Only use content from the provided syllabus. Do not add external information.`,
 
-TEACHER NOTE (INTERNAL – NOT SHOWN TO STUDENTS):
-- Provide a separate Answer Key for MCQs only at the END
-- Short and long answers will be reviewed by the teacher
+  quiz: `You are a Professional Assessment Creator for AI KISA Model School, Pakistan.
 
-FINAL CHECK:
-- Quiz must be suitable for online form submission
-- No answers visible to students in the question section
-- Content must strictly match syllabus
-- If the content doesn't cover enough material, say: "The provided syllabus does not contain enough content for this request."`,
+YOUR TASK: Generate quiz questions ONLY from the syllabus content provided below.
 
-  qa: `You are an AI Teaching Assistant for a school education platform.
-You ONLY use the provided syllabus content. You do NOT use internet or general AI knowledge.
+CRITICAL CONSTRAINTS:
+1. ALL questions MUST come from the provided SYLLABUS CONTENT - no exceptions
+2. If syllabus content is insufficient, say: "Insufficient syllabus content for the requested number of questions."
+3. Questions must be age-appropriate for the specified class level
+4. Use clear, unambiguous language
 
-TASK: Answer questions using ONLY the provided content.
+OUTPUT FORMAT:
 
-RULES:
-- Explain in very simple words suitable for school students
-- Use examples only if they appear in the content
-- If the answer is NOT found, reply exactly: "This information is not available in the provided syllabus."
-- Do NOT guess, assume, or add information
-- Be friendly, encouraging, and respectful`,
+=== MULTIPLE CHOICE QUESTIONS (MCQs) ===
 
-  homework: `You are an AI Teaching Assistant for a school education platform.
-You ONLY use the provided syllabus content. You do NOT use internet or general AI knowledge.
+Q1. [Question from syllabus content]
+A) [Option]
+B) [Option]
+C) [Option]
+D) [Option]
 
-TASK: Explain homework questions step-by-step.
+Q2. [Continue...]
 
-RULES:
-- Provide step-by-step explanations
-- Use simple English suitable for school students
-- Do not introduce new concepts not in the syllabus
-- Use only the provided content
-- If the topic is not covered, say: "This topic is not included in the provided syllabus."`
+=== SHORT ANSWER QUESTIONS ===
+
+Q1. [Question requiring 1-3 sentence answer]
+
+Q2. [Continue...]
+
+=== LONG ANSWER QUESTIONS ===
+
+Q1. [Question requiring detailed explanation]
+
+Q2. [Continue...]
+
+=================================
+ANSWER KEY (FOR TEACHER ONLY)
+=================================
+MCQs: Q1-[A/B/C/D], Q2-[A/B/C/D], ...
+Short Answers: Brief expected answers
+Long Answers: Key points to cover
+
+---
+IMPORTANT: Every question must be directly traceable to the provided syllabus content.`,
+
+  qa: `You are a Teaching Assistant for AI KISA Model School, Pakistan.
+
+YOUR TASK: Answer the student's question using ONLY the syllabus content provided below.
+
+CRITICAL CONSTRAINTS:
+1. ONLY use information from the SYLLABUS CONTENT section
+2. If the answer is NOT in the syllabus, respond EXACTLY: "This information is not available in the provided syllabus. Please check with your teacher."
+3. Use simple, clear language appropriate for school students
+4. Be encouraging and supportive in tone
+
+RESPONSE FORMAT:
+- Start with a direct answer to the question
+- Provide step-by-step explanation if needed
+- Use examples ONLY if they exist in the syllabus
+- End with an encouraging note if appropriate
+
+DO NOT:
+- Make assumptions or guesses
+- Add information from external sources
+- Say "I think" or "probably" - only state facts from syllabus`,
+
+  homework: `You are a Homework Helper for AI KISA Model School, Pakistan.
+
+YOUR TASK: Help the student understand and solve their homework using ONLY the syllabus content provided below.
+
+CRITICAL CONSTRAINTS:
+1. Use ONLY the provided SYLLABUS CONTENT for explanations
+2. If the topic is not in the syllabus, respond: "This topic is not in your syllabus. Please ask your teacher for help."
+3. Use simple, age-appropriate language
+4. Don't just give answers - teach the concept
+
+RESPONSE FORMAT:
+
+UNDERSTANDING THE QUESTION:
+[Explain what the question is asking]
+
+RELEVANT CONCEPTS FROM YOUR SYLLABUS:
+[List concepts from the provided syllabus that apply]
+
+STEP-BY-STEP SOLUTION:
+Step 1: [Explanation]
+Step 2: [Explanation]
+...
+
+ANSWER:
+[Final answer]
+
+TIP FOR SIMILAR PROBLEMS:
+[Helpful hint for future reference]
+
+---
+Remember: Guide the student to learn, don't just provide answers.`
 };
 
 serve(async (req) => {
@@ -111,9 +158,9 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+    if (!OPENROUTER_API_KEY) {
+      throw new Error("OPENROUTER_API_KEY is not configured");
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -163,15 +210,31 @@ serve(async (req) => {
         .from("extracted_content")
         .select("content")
         .eq("document_id", documentId)
-        .single();
+        .maybeSingle();
 
-      if (contentError || !contentData) {
-        return new Response(JSON.stringify({ error: "Document content not found" }), {
+      if (contentError) {
+        console.error("Error fetching document content:", contentError);
+        return new Response(JSON.stringify({ error: "Failed to fetch document content" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (!contentData || !contentData.content) {
+        console.error("No extracted content found for document:", documentId);
+        return new Response(JSON.stringify({ error: "Document has no extracted content. Please re-upload or wait for processing." }), {
           status: 404,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      
       extractedContent = contentData.content;
+      console.log(`Loaded ${extractedContent.length} chars of content for document ${documentId}`);
+    } else {
+      return new Response(JSON.stringify({ error: "Document ID is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Build the user message based on type
@@ -180,60 +243,67 @@ serve(async (req) => {
     if (type === "lesson_plan") {
       fullUserMessage = `
 SYLLABUS CONTENT:
-${extractedContent}
+${extractedContent.substring(0, 12000)}
 
-LESSON DETAILS:
+LESSON PLAN REQUEST:
 - Class Level: ${classLevel || "Not specified"}
 - Subject: ${subject || "Not specified"}
 - Chapter/Topic: ${chapterName || "Not specified"}
 - Duration: ${duration || 45} minutes
-${additionalNotes ? `- Additional Notes: ${additionalNotes}` : ""}
+${additionalNotes ? `- Additional Instructions: ${additionalNotes}` : ""}
 
-Please create a detailed lesson plan based on the above syllabus content.`;
+Please create a detailed, professional lesson plan based on the above syllabus content.`;
     } else if (type === "quiz") {
       fullUserMessage = `
 SYLLABUS CONTENT:
-${extractedContent}
+${extractedContent.substring(0, 12000)}
 
-QUIZ DETAILS:
+QUIZ GENERATION REQUEST:
 - Class Level: ${classLevel || "Not specified"}
 - Subject: ${subject || "Not specified"}
 - Chapter/Topic: ${chapterName || "Not specified"}
-- Question Type: ${questionType || "MCQs"}
-- Difficulty: ${difficulty || "Medium"}
+- Question Type: ${questionType || "Mixed (MCQs + Short + Long)"}
+- Difficulty Level: ${difficulty || "Medium"}
 - Number of Questions: ${numberOfQuestions || 10}
 
-Please generate a question paper with the specified format. Include an answer key at the end.`;
+Please generate a professional question paper following the specified format. Include teacher's answer key at the end.`;
     } else if (type === "qa" || type === "homework") {
       fullUserMessage = `
 SYLLABUS CONTENT:
-${extractedContent}
+${extractedContent.substring(0, 12000)}
 
-QUESTION:
+STUDENT QUESTION:
 ${userMessage}
 
-Please answer based ONLY on the syllabus content provided above.`;
+Please provide a helpful, detailed answer based ONLY on the syllabus content provided above.`;
     }
 
     const systemPrompt = SYSTEM_PROMPTS[type as keyof typeof SYSTEM_PROMPTS];
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Call OpenRouter API with ChatGPT model
+    const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://ai-kisa-school.edu",
+        "X-Title": "AI KISA Teaching Assistant",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "openai/gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: fullUserMessage },
         ],
         stream,
+        temperature: 0.5,
       }),
     });
 
     if (!aiResponse.ok) {
+      const errorData = await aiResponse.json().catch(() => ({}));
+      console.error("OpenRouter API error:", aiResponse.status, errorData);
+      
       if (aiResponse.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
           status: 429,
@@ -241,14 +311,12 @@ Please answer based ONLY on the syllabus content provided above.`;
         });
       }
       if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add credits." }), {
+        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add credits to OpenRouter." }), {
           status: 402,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const errorText = await aiResponse.text();
-      console.error("AI gateway error:", aiResponse.status, errorText);
-      throw new Error("AI gateway error");
+      throw new Error(errorData.error?.message || "AI API error");
     }
 
     if (stream) {

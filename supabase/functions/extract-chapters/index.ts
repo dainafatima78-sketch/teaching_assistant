@@ -49,40 +49,53 @@ serve(async (req) => {
     }
 
     const extractedText = contentData.content;
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+    if (!OPENROUTER_API_KEY) {
+      throw new Error("OPENROUTER_API_KEY is not configured");
     }
 
-    // Use fast model for chapter extraction
-    const chapterResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Use OpenRouter for chapter extraction
+    const chapterResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://ai-kisa-school.edu",
+        "X-Title": "AI KISA Chapter Extractor",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
+        model: "openai/gpt-4o-mini",
         messages: [
           {
             role: "system",
-            content: `Analyze educational content and extract chapters/topics.
-Return JSON: {"chapters": [{"name": "Chapter Name", "content": "Brief summary..."}]}
-If no clear chapters, divide by major topics.`
+            content: `You are a Professional Content Analyzer for AI KISA Model School.
+
+TASK: Analyze educational content and extract chapters/topics.
+
+INSTRUCTIONS:
+1. Identify distinct chapters or major sections
+2. For each chapter, provide name and brief content summary
+3. If no clear chapters exist, divide by major topics
+
+OUTPUT FORMAT (JSON only):
+{"chapters": [{"name": "Chapter Name", "content": "Brief 2-3 sentence summary of chapter content"}]}
+
+Return ONLY valid JSON, no other text.`
           },
           {
             role: "user",
-            content: `Extract chapters:\n\n${extractedText.substring(0, 15000)}`
+            content: `Extract chapters from this educational content:\n\n${extractedText.substring(0, 15000)}`
           }
         ],
         response_format: { type: "json_object" },
+        temperature: 0.3,
         max_tokens: 4000,
       }),
     });
 
     if (!chapterResponse.ok) {
-      const errorText = await chapterResponse.text();
-      console.error("Chapter extraction error:", errorText);
+      const errorData = await chapterResponse.json().catch(() => ({}));
+      console.error("OpenRouter chapter extraction error:", errorData);
       throw new Error("Failed to extract chapters");
     }
 

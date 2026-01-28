@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, FileText, Mic, MicOff, Paperclip, X, Image, File, Loader2, Plus, MessageSquare, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Send, Bot, User, FileText, Mic, MicOff, Paperclip, X, Image, File, Loader2, Plus, MessageSquare, Trash2, MoreHorizontal, PanelLeftClose, PanelLeft } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,11 +17,20 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useDocuments } from "@/hooks/useDocuments";
+import { isValidExtractedText } from "@/hooks/useDocuments";
 import { useTeachingAssistant } from "@/hooks/useTeachingAssistant";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useChatConversations, useChatMessages, useCreateConversation, useDeleteConversation, useSaveMessage } from "@/hooks/useChatHistory";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow } from "date-fns";
@@ -53,6 +62,8 @@ export default function AIChat() {
   const { data: documents = [], isLoading: docsLoading } = useDocuments();
   const { generate, isLoading, content: streamContent, reset } = useTeachingAssistant();
   const { isRecording, isTranscribing, startRecording, stopRecording } = useVoiceRecorder();
+  const isMobile = useIsMobile();
+  const { language, t } = useLanguage();
   
   // Chat history hooks
   const { data: conversations = [], isLoading: conversationsLoading } = useChatConversations();
@@ -74,7 +85,14 @@ export default function AIChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const processedDocs = documents.filter(doc => doc.extracted_content);
+  const readyDocs = documents.filter((doc) => isValidExtractedText(doc.extracted_content?.content));
+  const pendingDocs = documents.filter(
+    (doc) => !!doc.extracted_content && !isValidExtractedText(doc.extracted_content?.content)
+  );
+
+  useEffect(() => {
+    if (isMobile) setSidebarOpen(false);
+  }, [isMobile]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -333,10 +351,14 @@ export default function AIChat() {
       attachments: userMessage.attachments?.map(a => ({ name: a.name, type: a.type })),
     });
 
+    const languageInstruction = language === "urdu" 
+      ? "\n\n[IMPORTANT: Respond in Roman Urdu (Urdu written in English letters). Use simple language suitable for students.]"
+      : "";
+    
     const result = await generate({
       type: "qa",
       documentId: selectedDocId,
-      userMessage: fullMessage,
+      userMessage: fullMessage + languageInstruction,
     });
 
     // Save assistant response
@@ -353,6 +375,129 @@ export default function AIChat() {
 
   const selectedDoc = documents.find(d => d.id === selectedDocId);
 
+  // Group conversations by date
+  const groupConversationsByDate = () => {
+    const groups: { label: string; items: typeof conversations }[] = [];
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+
+    const todayItems = conversations.filter(c => {
+      const date = new Date(c.updated_at);
+      return date.toDateString() === today.toDateString();
+    });
+    const yesterdayItems = conversations.filter(c => {
+      const date = new Date(c.updated_at);
+      return date.toDateString() === yesterday.toDateString();
+    });
+    const weekItems = conversations.filter(c => {
+      const date = new Date(c.updated_at);
+      return date > weekAgo && date.toDateString() !== today.toDateString() && date.toDateString() !== yesterday.toDateString();
+    });
+    const olderItems = conversations.filter(c => new Date(c.updated_at) <= weekAgo);
+
+    if (todayItems.length) groups.push({ label: language === "urdu" ? "آج" : "Today", items: todayItems });
+    if (yesterdayItems.length) groups.push({ label: language === "urdu" ? "کل" : "Yesterday", items: yesterdayItems });
+    if (weekItems.length) groups.push({ label: language === "urdu" ? "7 دن" : "7 Days", items: weekItems });
+    if (olderItems.length) groups.push({ label: language === "urdu" ? "پرانے" : "Older", items: olderItems });
+
+    return groups;
+  };
+
+  const SidebarPanel = () => (
+    <div className="flex-1 flex flex-col bg-card border-r border-border">
+      {/* Sidebar Header */}
+      <div className="p-3 border-b border-border">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">{t("chat.history")}</h2>
+          <Button
+            size="sm"
+            onClick={handleNewChat}
+            disabled={createConversation.isPending}
+            className="h-8 gap-1.5"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {t("chat.newChat")}
+          </Button>
+        </div>
+      </div>
+
+      {/* Conversations List */}
+      <ScrollArea className="flex-1">
+        <div className="p-2">
+          {conversationsLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : conversations.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-8">
+              {t("chat.noChats")}
+            </p>
+          ) : (
+            groupConversationsByDate().map((group) => (
+              <div key={group.label} className="mb-4">
+                <p className="text-xs font-medium text-muted-foreground px-2 py-1.5">{group.label}</p>
+                <div className="space-y-0.5">
+                  {group.items.map((conv) => (
+                    <div
+                      key={conv.id}
+                      onClick={() => handleSelectConversation(conv)}
+                      className={cn(
+                        "flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer group transition-colors",
+                        currentConversationId === conv.id
+                          ? "bg-primary/10"
+                          : "hover:bg-muted/50"
+                      )}
+                    >
+                      <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className={cn(
+                        "flex-1 text-sm truncate",
+                        currentConversationId === conv.id ? "text-primary font-medium" : "text-foreground"
+                      )}>
+                        {conv.title}
+                      </span>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>{t("common.delete")} Chat</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              {t("chat.deleteConfirm")}
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={(e) => handleDeleteConversation(conv.id, e)}
+                            >
+                              {t("common.delete")}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+
   const getFileIcon = (type: Attachment["type"]) => {
     switch (type) {
       case "image":
@@ -366,141 +511,106 @@ export default function AIChat() {
 
   return (
     <MainLayout>
-      <div className="flex h-[calc(100vh-8rem)] gap-4">
-        {/* Chat History Sidebar */}
+      <div className="relative flex h-[calc(100svh-7rem)] lg:h-[calc(100vh-6rem)] gap-4">
+        {/* Sidebar (Desktop) */}
         <div className={cn(
-          "transition-all duration-300 flex flex-col",
-          sidebarOpen ? "w-64" : "w-0 overflow-hidden"
+          "hidden lg:flex transition-all duration-300 flex-col shrink-0",
+          sidebarOpen ? "w-72" : "w-0 overflow-hidden"
         )}>
-          <Card className="flex-1 flex flex-col border-primary/10">
-            <CardHeader className="py-3 px-4 bg-primary/5 rounded-t-lg">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-primary">Chat History</CardTitle>
-                <Button 
-                  size="sm" 
-                  onClick={handleNewChat}
-                  disabled={createConversation.isPending}
-                  className="h-8"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  New
-                </Button>
-              </div>
-            </CardHeader>
-            <ScrollArea className="flex-1">
-              <div className="p-2 space-y-1">
-                {conversationsLoading ? (
-                  <div className="flex justify-center py-4">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                  </div>
-                ) : conversations.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-4">
-                    No chats yet. Start a new conversation!
-                  </p>
-                ) : (
-                  conversations.map((conv) => (
-                    <div
-                      key={conv.id}
-                      onClick={() => handleSelectConversation(conv)}
-                      className={cn(
-                        "flex items-center gap-2 p-2 rounded-lg cursor-pointer group transition-colors",
-                        currentConversationId === conv.id
-                          ? "bg-primary/10 text-primary"
-                          : "hover:bg-secondary text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      <MessageSquare className="h-4 w-4 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm truncate">{conv.title}</p>
-                        <p className="text-xs opacity-60">
-                          {formatDistanceToNow(new Date(conv.updated_at), { addSuffix: true })}
-                        </p>
-                      </div>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Trash2 className="h-3 w-3 text-destructive" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Chat</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete this chat? This action cannot be undone and all messages will be permanently removed.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              onClick={(e) => handleDeleteConversation(conv.id, e)}
-                            >
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
-          </Card>
+          <SidebarPanel />
         </div>
 
-        {/* Toggle Sidebar Button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute left-[calc(16rem+1rem)] top-24 z-10 h-6 w-6 rounded-full bg-background border shadow-sm"
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          style={{ left: sidebarOpen ? "calc(16rem + 1rem + 256px)" : "calc(16rem + 1rem)" }}
-        >
-          {sidebarOpen ? <ChevronLeft className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        </Button>
+        {/* Sidebar (Mobile overlay) */}
+        {isMobile && sidebarOpen && (
+          <div className="fixed inset-0 z-50">
+            <button
+              type="button"
+              className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+              onClick={() => setSidebarOpen(false)}
+              aria-label="Close chat history"
+            />
+            <div className="absolute inset-y-0 left-0 w-[85vw] max-w-sm p-4">
+              <SidebarPanel />
+            </div>
+          </div>
+        )}
 
         {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col max-w-4xl">
+        <div className="flex-1 flex flex-col min-w-0">
           {/* Header */}
-          <div className="mb-4 animate-fade-in">
-            <h1 className="font-display text-3xl font-bold text-foreground">AI Chat Assistant</h1>
-            <p className="mt-1 text-muted-foreground text-sm">
-              Ask questions, upload files, or use voice input — answers from your syllabus only.
-            </p>
+          <div className="mb-3 animate-fade-in shrink-0">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h1 className="font-display text-xl lg:text-2xl font-bold text-foreground">{t("chat.title")}</h1>
+                <p className="mt-0.5 text-muted-foreground text-xs hidden sm:block">
+                  {language === "urdu" ? "اپنے نصاب سے سوالات پوچھیں" : "Ask questions from your syllabus"}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="lg:hidden border-primary/20"
+                  onClick={() => setSidebarOpen(true)}
+                >
+                  {t("chat.history")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="hidden lg:inline-flex border-primary/20 h-9 w-9"
+                  onClick={() => setSidebarOpen((v) => !v)}
+                  title={sidebarOpen ? "Hide history" : "Show history"}
+                >
+                  {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
           </div>
 
           {/* Document Selection */}
-          <Card className="mb-4 animate-slide-up border-primary/10">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-4">
-                <FileText className="h-5 w-5 text-primary shrink-0" />
-                <div className="flex-1">
-                  <Select value={selectedDocId} onValueChange={setSelectedDocId}>
-                    <SelectTrigger className="border-primary/20">
+          <Card className="mb-3 animate-slide-up border-primary/10 shrink-0">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+                  {docsLoading ? (
+                    <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                  ) : (
+                    <FileText className="h-4 w-4 text-primary" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <Select value={selectedDocId} onValueChange={setSelectedDocId} disabled={docsLoading}>
+                    <SelectTrigger className="border-primary/20 h-9">
                       <SelectValue placeholder={docsLoading ? "Loading documents..." : "Select syllabus document"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {processedDocs.length === 0 ? (
+                      {readyDocs.length === 0 ? (
                         <SelectItem value="_none" disabled>
-                          No processed documents. Upload syllabus first.
+                          {pendingDocs.length > 0
+                            ? "Documents processing…"
+                            : "No documents. Upload syllabus first."}
                         </SelectItem>
                       ) : (
-                        processedDocs.map((doc) => (
-                          <SelectItem key={doc.id} value={doc.id}>
-                            {doc.file_name}
-                          </SelectItem>
-                        ))
+                        <>
+                          {readyDocs.map((doc) => (
+                            <SelectItem key={doc.id} value={doc.id}>
+                              {doc.file_name}
+                            </SelectItem>
+                          ))}
+                          {pendingDocs.map((doc) => (
+                            <SelectItem key={doc.id} value={`pending-${doc.id}`} disabled>
+                              {doc.file_name} (processing…)
+                            </SelectItem>
+                          ))}
+                        </>
                       )}
                     </SelectContent>
                   </Select>
                 </div>
                 {selectedDoc && (
-                  <span className="text-sm text-muted-foreground shrink-0">
+                  <span className="text-xs text-muted-foreground shrink-0 hidden sm:block">
                     {selectedDoc.subject && <span className="capitalize">{selectedDoc.subject}</span>}
                     {selectedDoc.class_level && <span> • Class {selectedDoc.class_level}</span>}
                   </span>
@@ -510,22 +620,23 @@ export default function AIChat() {
           </Card>
 
           {/* Chat Container */}
-          <Card className="flex-1 flex flex-col overflow-hidden animate-slide-up border-primary/10">
-            <CardHeader className="border-b bg-secondary/30 py-3">
+          <Card className="flex-1 flex flex-col min-h-0 animate-slide-up border-primary/10 shadow-sm overflow-hidden">
+            <CardHeader className="border-b bg-gradient-to-r from-primary/5 to-accent/5 py-2.5 px-4 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full gradient-primary">
-                  <Bot className="h-5 w-5 text-primary-foreground" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent shadow-md">
+                  <Bot className="h-4 w-4 text-primary-foreground" />
                 </div>
                 <div>
-                  <CardTitle className="text-base">TeachAI Assistant</CardTitle>
+                  <CardTitle className="text-sm font-semibold">TeachAI Assistant</CardTitle>
                   <CardDescription className="text-xs">
-                    Answering from your uploaded syllabus only
+                    {language === "urdu" ? "آپ کے syllabus سے جواب دے رہا ہوں" : "Answering from your syllabus only"}
                   </CardDescription>
                 </div>
               </div>
             </CardHeader>
 
-            <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
+            <ScrollArea className="flex-1 min-h-0">
+              <div className="p-4 space-y-4">
               {messages.map((message) => (
                 <div
                   key={message.id}
@@ -593,8 +704,9 @@ export default function AIChat() {
                 </div>
               )}
 
-              <div ref={messagesEndRef} />
-            </CardContent>
+                <div ref={messagesEndRef} />
+              </div>
+            </ScrollArea>
 
             {/* Attachments Preview */}
             {attachments.length > 0 && (
@@ -627,19 +739,9 @@ export default function AIChat() {
               </div>
             )}
 
-            {/* Input Area */}
-            <div className="border-t p-4 bg-background">
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isLoading || isProcessingFile}
-                  title="Attach file (Image, PDF, DOCX)"
-                  className="border-primary/20"
-                >
-                  <Paperclip className="h-4 w-4" />
-                </Button>
+            {/* Input Area - Modern Design */}
+            <div className="border-t p-3 bg-background/80 backdrop-blur-sm shrink-0">
+              <div className="flex items-center gap-2 p-2 bg-secondary/50 rounded-xl border border-border">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -648,37 +750,52 @@ export default function AIChat() {
                   className="hidden"
                   onChange={handleFileSelect}
                 />
+                
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isLoading || isProcessingFile}
+                  title="Attach file"
+                  className="h-9 w-9 rounded-lg hover:bg-background"
+                >
+                  <Paperclip className="h-4 w-4 text-muted-foreground" />
+                </Button>
 
                 <Button
-                  variant={isRecording ? "destructive" : "outline"}
+                  variant="ghost"
                   size="icon"
                   onClick={handleVoiceToggle}
                   disabled={isLoading || isTranscribing || isProcessingFile}
                   title={isRecording ? "Stop recording" : "Voice input"}
-                  className={!isRecording ? "border-primary/20" : ""}
+                  className={cn(
+                    "h-9 w-9 rounded-lg",
+                    isRecording ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : "hover:bg-background"
+                  )}
                 >
                   {isTranscribing ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : isRecording ? (
                     <MicOff className="h-4 w-4" />
                   ) : (
-                    <Mic className="h-4 w-4" />
+                    <Mic className="h-4 w-4 text-muted-foreground" />
                   )}
                 </Button>
 
                 <Input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder={isRecording ? "🎤 Listening..." : "Ask a question about your syllabus..."}
+                  placeholder={isRecording ? "🎤 Listening..." : (language === "urdu" ? "اپنا سوال لکھیں..." : "Message TeachAI...")}
                   onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-                  className="flex-1 border-primary/20"
+                  className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 placeholder:text-muted-foreground/60"
                   disabled={isLoading || isRecording || isProcessingFile}
                 />
 
                 <Button 
                   onClick={handleSend} 
                   disabled={(!input.trim() && attachments.length === 0) || isLoading || isRecording || isProcessingFile}
-                  className="bg-primary hover:bg-primary/90"
+                  size="icon"
+                  className="h-9 w-9 rounded-lg bg-primary hover:bg-primary/90 shrink-0"
                 >
                   {isProcessingFile ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
